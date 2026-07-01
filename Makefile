@@ -7,27 +7,28 @@ LDFLAGS := -ldflags "-X github.com/viniciusfranca/vdt/internal/version.Version=$
 .PHONY: build test fmt vet lint check install uninstall clean
 
 build:
-	go build $(LDFLAGS) -o vdt ./cmd/vdt
+	@go build $(LDFLAGS) -o vdt ./cmd/vdt
 
 test:
-	go test -race ./...
+	@go test -race ./...
 
 fmt:
-	gofmt -w .
+	@gofmt -w .
 
 vet:
-	go vet ./...
+	@go vet ./...
 
 lint:
-	golangci-lint run
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2"; exit 1; }
+	@golangci-lint run
 
 check: fmt vet lint test
 
 install:
-	./install.sh install
+	@./install.sh install
 
 uninstall:
-	./install.sh uninstall
+	@./install.sh uninstall
 
 clean:
-	rm -f vdt
+	@rm -f vdt
