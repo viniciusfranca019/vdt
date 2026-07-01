@@ -21,7 +21,7 @@ func Command() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "ping",
 		Short: "Print pong, repeated a configurable number of times",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, _ []string) error {
 			count, err := cmd.Flags().GetInt("count")
 			if err != nil {
 				return err
