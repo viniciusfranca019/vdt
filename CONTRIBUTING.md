@@ -5,7 +5,7 @@ Thanks for considering a contribution to vdt.
 ## Setup
 
 - Go 1.26.x
-- [golangci-lint](https://golangci-lint.run/) pinned to `v1.62.2` (the exact
+- [golangci-lint](https://golangci-lint.run/) pinned to `v2.12.2` (the exact
   version used by CI)
 
 ## Before opening a PR

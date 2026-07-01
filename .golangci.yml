@@ -1,25 +1,40 @@
-run:
-  timeout: 5m
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
   enable:
     - errcheck
+    - gosec
     - govet
-    - staticcheck
     - ineffassign
+    - revive
+    - staticcheck
     - unused
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - gosec
+        path: _test\.go
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
     - gofmt
     - goimports
-    - revive
-    - gosec
-
-linters-settings:
-  goimports:
-    local-prefixes: github.com/viniciusfranca/vdt
-
-issues:
-  exclude-rules:
-    - path: _test\.go
-      linters:
-        - gosec
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/viniciusfranca/vdt
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

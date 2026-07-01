@@ -19,7 +19,7 @@ vet:
 	@go vet ./...
 
 lint:
-	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2"; exit 1; }
+	@command -v golangci-lint >/dev/null 2>&1 || { echo "golangci-lint not found. Install it with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v2.12.2"; exit 1; }
 	@golangci-lint run
 
 check: fmt vet lint test

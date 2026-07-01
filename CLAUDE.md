@@ -98,10 +98,11 @@ pick up a new module.
 
 ## Linters
 
-- `golangci-lint` is pinned to `v1.62.2` (the exact version CI uses).
+- `golangci-lint` is pinned to `v2.12.2` (the exact version CI uses).
 - Enabled linters (see `.golangci.yml`): `errcheck`, `govet`,
-  `staticcheck`, `ineffassign`, `unused`, `gofmt`, `goimports`, `revive`,
-  `gosec`.
+  `staticcheck`, `ineffassign`, `unused`, `revive`, `gosec`. `gofmt` and
+  `goimports` are configured under the `formatters:` section in v2, not as
+  linters.
 - `goimports` uses local-prefix grouping for `github.com/viniciusfranca/vdt`.
 - `gosec` findings are excluded on `_test.go` files only — all other Go
   files must be gosec-clean.
