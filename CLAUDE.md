@@ -23,8 +23,13 @@ full set of available commands is always visible by reading a single file.
 - `internal/ping` — the **reference module**. Copy it to bootstrap any new
   module; see "Adding a module" below.
 - `internal/config` — config/secrets stub. Defines the `config.Secret`
-  type and the XDG-based config path/loading pattern future modules should
-  follow.
+  type, `Path()` (XDG-based config path via `os.UserConfigDir()`), and
+  `ErrNotConfigured`. **Currently a stub**: `Config` has no fields and
+  `Load()` only returns `ErrNotConfigured` — nothing yet reads environment
+  variables or the on-disk YAML file. A self-contained module (like
+  `ping`: flags in, output out) needs none of this and can be added today.
+  A module that needs credentials/config (e.g. a future `linear` module
+  needing an API token) requires implementing real config loading first.
 
 ## Commands
 
