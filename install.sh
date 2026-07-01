@@ -29,7 +29,7 @@ usage() {
 cmd_install() {
 	echo "==> Building vdt ${VERSION} (commit ${COMMIT}, built ${DATE})"
 	mkdir -p "$INSTALL_DIR"
-	go build -ldflags "$LDFLAGS" -o "$INSTALL_DIR/vdt" .
+	go build -ldflags "$LDFLAGS" -o "$INSTALL_DIR/vdt" ./cmd/vdt
 	echo "==> Installed vdt to $INSTALL_DIR/vdt"
 
 	case ":$PATH:" in

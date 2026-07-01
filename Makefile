@@ -7,7 +7,7 @@ LDFLAGS := -ldflags "-X github.com/viniciusfranca/vdt/internal/version.Version=$
 .PHONY: build test fmt vet lint check install uninstall clean
 
 build:
-	go build $(LDFLAGS) -o vdt .
+	go build $(LDFLAGS) -o vdt ./cmd/vdt
 
 test:
 	go test -race ./...
