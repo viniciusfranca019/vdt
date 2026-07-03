@@ -5,7 +5,6 @@ import (
 	"crypto/subtle"
 	"errors"
 	"fmt"
-	"html"
 	"net"
 	"net/http"
 	"sync"
@@ -147,7 +146,7 @@ func (c *callbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 	// first and independently of state: we still want to reject cleanly
 	// without ever depending on / echoing the raw query string.
 	if errParam := q.Get("error"); errParam != "" {
-		c.deliver(w, "", fmt.Errorf("linear authorization denied: %s", errParam), errorPageHTML(errParam))
+		c.deliver(w, "", fmt.Errorf("linear authorization denied: %s", errParam), renderErrorPage(errParam))
 		return
 	}
 
@@ -159,11 +158,11 @@ func (c *callbackServer) handleCallback(w http.ResponseWriter, r *http.Request) 
 		// On mismatch the code must never be surfaced, so it is
 		// intentionally omitted from the delivered outcome even though it
 		// was present on the request.
-		c.deliver(w, "", errors.New("linear oauth callback: state mismatch"), errorPageHTML("state mismatch"))
+		c.deliver(w, "", errors.New("linear oauth callback: state mismatch"), renderErrorPage("state mismatch"))
 		return
 	}
 
-	c.deliver(w, q.Get("code"), nil, successPageHTML)
+	c.deliver(w, q.Get("code"), nil, successPage())
 }
 
 // deliver hands (code, err) to wait() exactly once, via sync.Once. Any
@@ -190,37 +189,4 @@ func (c *callbackServer) deliver(w http.ResponseWriter, code string, err error, 
 	// go idle, which only happens once this handler returns and the
 	// response above is flushed, so running it inline here would deadlock.
 	go func() { _ = c.Close() }()
-}
-
-// successPageHTML is the inline (no external resources) page shown to the
-// user after a successful authorization callback.
-const successPageHTML = `<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Linear Authorization</title>
-<style>body{font-family:sans-serif;text-align:center;margin-top:10%}</style>
-</head>
-<body>
-<h1>Authorization complete</h1>
-<p>You may close this window.</p>
-</body>
-</html>`
-
-// errorPageHTML renders the inline (no external resources) page shown to
-// the user when the callback carries an OAuth error or fails the state
-// check. reason is HTML-escaped since it originates from a query parameter.
-func errorPageHTML(reason string) string {
-	return fmt.Sprintf(`<!DOCTYPE html>
-<html>
-<head>
-<meta charset="utf-8">
-<title>Linear Authorization Failed</title>
-<style>body{font-family:sans-serif;text-align:center;margin-top:10%%}</style>
-</head>
-<body>
-<h1>Authorization failed</h1>
-<p>%s</p>
-</body>
-</html>`, html.EscapeString(reason))
 }
