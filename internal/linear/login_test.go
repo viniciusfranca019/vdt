@@ -352,6 +352,12 @@ func TestClient_Logout(t *testing.T) {
 // read LINEAR_CLIENT_ID / LINEAR_CLIENT_SECRET from the environment and
 // build a *Client carrying them, with the secret held as config.Secret.
 func TestNewClient_ReadsEnvClientCredentials(t *testing.T) {
+	// Isolate os.UserConfigDir() from any real ~/.config/vdt/config.yaml on
+	// the machine running this test: once newClient() also consults the
+	// config file, an ambient file could otherwise leak in. Env must win
+	// regardless, but this removes the ambient interference.
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 	t.Setenv("LINEAR_CLIENT_ID", "cid")
 	t.Setenv("LINEAR_CLIENT_SECRET", "csecret")
 
@@ -409,6 +415,12 @@ func TestNewClient_MissingCredentialsErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// Isolate os.UserConfigDir() so this test is deterministic even
+			// once newClient() also consults the config file: an empty temp
+			// dir guarantees no config file exists, so the fallback chain
+			// falls all the way through to the non-interactive error.
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
 			t.Setenv("LINEAR_CLIENT_ID", tt.clientID)
 			t.Setenv("LINEAR_CLIENT_SECRET", tt.clientSecret)
 
@@ -435,5 +447,47 @@ func TestNewClient_MissingCredentialsErrors(t *testing.T) {
 				t.Errorf("newClient() error %q leaks the present client secret value %q", msg, presentSecretSentinel)
 			}
 		})
+	}
+}
+
+// TestNewClient_ReadsConfigFileWhenEnvUnset pins resolution step 2 of the
+// credential fallback chain (see credentials.go's credentialResolver doc
+// comment) as exercised through newClient() itself, not just the resolver
+// unit tests in credentials_test.go: when both LINEAR_CLIENT_ID and
+// LINEAR_CLIENT_SECRET are unset, newClient() must fall back to the on-disk
+// config file (resolved via config.Path(), rooted under
+// os.UserConfigDir()) and build a *Client carrying the credentials found
+// there, with the secret held as config.Secret.
+func TestNewClient_ReadsConfigFileWhenEnvUnset(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("LINEAR_CLIENT_ID", "")
+	t.Setenv("LINEAR_CLIENT_SECRET", "")
+
+	path, err := config.Path()
+	if err != nil {
+		t.Fatalf("config.Path() returned error: %v", err)
+	}
+
+	if err := config.SaveTo(path, &config.Config{
+		Linear: config.LinearConfig{
+			ClientID:     "cid-from-file",
+			ClientSecret: config.Secret("secret-from-file"),
+		},
+	}); err != nil {
+		t.Fatalf("config.SaveTo(%q, ...) returned error: %v", path, err)
+	}
+
+	c, err := newClient()
+	if err != nil {
+		t.Fatalf("newClient() returned error: %v, want it to fall back to the on-disk config file", err)
+	}
+	if c == nil {
+		t.Fatal("newClient() returned nil *Client with nil error")
+	}
+	if c.clientID != "cid-from-file" {
+		t.Errorf("clientID = %q, want %q (from config file)", c.clientID, "cid-from-file")
+	}
+	if string(c.clientSecret) != "secret-from-file" {
+		t.Errorf("clientSecret = %q, want %q (from config file)", string(c.clientSecret), "secret-from-file")
 	}
 }

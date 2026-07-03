@@ -1,6 +1,7 @@
 package linear
 
 import (
+	"bufio"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -14,6 +15,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"golang.org/x/term"
 
 	"github.com/viniciusfranca/vdt/internal/config"
 )
@@ -49,15 +52,24 @@ const (
 // user's OS config directory (via os.UserConfigDir, never a path relative to
 // the working directory or repository — see CLAUDE.md "Config paths").
 //
-// Client credentials are read env-first (see CLAUDE.md "Secrets sourcing"):
-// LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET must both be set. There is
-// deliberately no on-disk fallback yet, since internal/config.Load is still
-// a stub with no parsing for arbitrary per-module credentials.
+// Client credentials are resolved via credentialResolver (see
+// credentials.go): environment variables first (CLAUDE.md "Secrets
+// sourcing"), then the on-disk config file, then interactive prompting when
+// the session is a TTY, and finally a didactic error.
 func newClient() (*Client, error) {
-	clientID := os.Getenv("LINEAR_CLIENT_ID")
-	clientSecret := os.Getenv("LINEAR_CLIENT_SECRET")
-	if clientID == "" || clientSecret == "" {
-		return nil, missingCredentialsError()
+	resolver := credentialResolver{
+		getenv:        os.Getenv,
+		loadConfig:    loadLinearConfig,
+		saveConfig:    saveLinearConfig,
+		isInteractive: isTerminalStdin,
+		promptLine:    promptLine,
+		promptSecret:  promptSecret,
+		out:           os.Stderr,
+	}
+
+	clientID, clientSecret, err := resolver.resolve()
+	if err != nil {
+		return nil, err
 	}
 
 	userConfigDir, err := os.UserConfigDir()
@@ -72,13 +84,96 @@ func newClient() (*Client, error) {
 		rand:         rand.Reader,
 		store:        newStore(filepath.Join(userConfigDir, "vdt")),
 		clientID:     clientID,
-		clientSecret: config.Secret(clientSecret),
+		clientSecret: clientSecret,
 		authorizeURL: defaultAuthorizeURL,
 		tokenURL:     defaultTokenURL,
 		revokeURL:    defaultRevokeURL,
 		apiURL:       defaultAPIURL,
 		redirectPort: redirectPort,
 	}, nil
+}
+
+// loadLinearConfig loads vdt's on-disk config file from its standard
+// location (config.Path, rooted under os.UserConfigDir). It is the real
+// loadConfig dependency wired into newClient's credentialResolver.
+func loadLinearConfig() (*config.Config, error) {
+	path, err := config.Path()
+	if err != nil {
+		return nil, err
+	}
+
+	return config.LoadFrom(path)
+}
+
+// saveLinearConfig persists clientID/secret into the Linear section of
+// vdt's on-disk config file, preserving any other existing config fields.
+// It is the real saveConfig dependency wired into newClient's
+// credentialResolver.
+func saveLinearConfig(clientID string, secret config.Secret) error {
+	cfg, err := loadLinearConfig()
+	if err != nil {
+		if errors.Is(err, config.ErrNotConfigured) {
+			cfg = &config.Config{}
+		} else {
+			return err
+		}
+	}
+
+	cfg.Linear.ClientID = clientID
+	cfg.Linear.ClientSecret = secret
+
+	path, err := config.Path()
+	if err != nil {
+		return err
+	}
+
+	return config.SaveTo(path, cfg)
+}
+
+// isTerminalStdin reports whether stdin is an interactive terminal. It is
+// the real isInteractive dependency wired into newClient's
+// credentialResolver.
+func isTerminalStdin() bool {
+	return term.IsTerminal(int(os.Stdin.Fd()))
+}
+
+// promptLine writes label to stderr and reads one visible line from stdin,
+// trimming the trailing newline/carriage-return and surrounding whitespace.
+// It is the real promptLine dependency wired into newClient's
+// credentialResolver, used for the (non-secret) client_id.
+func promptLine(label string) (string, error) {
+	if _, err := fmt.Fprint(os.Stderr, label); err != nil {
+		return "", err
+	}
+
+	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", err
+	}
+
+	return strings.TrimSpace(line), nil
+}
+
+// promptSecret writes label to stderr and reads one masked line from stdin
+// via golang.org/x/term, never echoing or logging the typed bytes. It is the
+// real promptSecret dependency wired into newClient's credentialResolver,
+// used for the client_secret.
+func promptSecret(label string) (string, error) {
+	if _, err := fmt.Fprint(os.Stderr, label); err != nil {
+		return "", err
+	}
+
+	// os.Stdin.Fd() is a fixed, well-known file descriptor value (never
+	// user-controlled input), so this is not an unsafe integer conversion.
+	b, err := term.ReadPassword(int(os.Stdin.Fd())) //nolint:gosec // G115: fixed fd value, not user-controlled
+	// ReadPassword suppresses the echoed newline; restore it regardless of
+	// the read outcome so the terminal is left in a sane state.
+	_, _ = fmt.Fprintln(os.Stderr)
+	if err != nil {
+		return "", err
+	}
+
+	return string(b), nil
 }
 
 // login performs the Linear OAuth 2.0 authorization code flow with PKCE
