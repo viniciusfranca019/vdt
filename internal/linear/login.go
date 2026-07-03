@@ -104,7 +104,7 @@ func (c *Client) login(ctx context.Context, out io.Writer) error {
 
 	srv, err := newCallbackServer(c.redirectPort, state)
 	if err != nil {
-		return fmt.Errorf("start linear oauth callback server: %w", err)
+		return fmt.Errorf("start local callback server (another `vdt linear login` may be running?): %w", err)
 	}
 	defer func() { _ = srv.Close() }()
 
@@ -224,8 +224,6 @@ func (c *Client) revoke(ctx context.Context, access config.Secret) error {
 // configuration) and targetURL is passed as a separate argv entry — never
 // interpolated into a shell string — so this does not shell out to
 // attacker-influenced input.
-//
-// never variable; targetURL is a plain argv element, not a shell string.
 //
 //nolint:gosec // G204: command name is one of the fixed literals below,
 func openInBrowser(targetURL string) error {

@@ -58,12 +58,18 @@ func (c *Client) validToken(ctx context.Context) (config.Secret, error) {
 // refresh performs the RFC 6749 §6 refresh_token grant against c.tokenURL,
 // exchanging cur's refresh token for a new access token.
 //
-// On a non-2xx response (e.g. the refresh token was revoked or already
-// rotated elsewhere), refresh deletes the local credentials so the user is
-// cleanly logged out, and returns an error built only from the token
-// endpoint's typed "error" field plus the HTTP status text — never the raw
-// response body or "error_description", either of which could otherwise
-// leak attacker- or server-supplied secrets straight into logs.
+// On a non-2xx response, refresh only deletes the local credentials when the
+// token endpoint's typed "error" field indicates the grant itself is
+// terminally dead (invalid_grant, invalid_client, unauthorized_client) — see
+// isTerminalGrantError. Any other non-2xx response (a transient 5xx, a
+// network-level failure surfaced as non-2xx, or a body that doesn't parse
+// into a recognized error code) is treated as retryable and leaves the
+// stored credentials untouched, so a caller can simply retry later instead
+// of being forced through a full re-login. Either way, the returned error is
+// built only from the token endpoint's typed "error" field plus the HTTP
+// status text — never the raw response body or "error_description", either
+// of which could otherwise leak attacker- or server-supplied secrets
+// straight into logs.
 //
 // On a 2xx response that omits refresh_token (some providers don't rotate it
 // on every refresh), the previous refresh token is retained as long as the
@@ -124,17 +130,57 @@ func (c *Client) refresh(ctx context.Context, cur *Token) (*Token, error) {
 }
 
 // refreshRejected builds the error returned when the token endpoint rejects
-// a refresh_token grant, and deletes the local credentials so the user is
-// cleanly logged out and prompted to re-authenticate. The returned error is
-// built only from the typed "error" field (via tokenExchangeError) — never
-// the raw body or "error_description" — so a rejected-grant response can
-// never leak a secret-shaped substring into a log line.
+// a refresh_token grant, deleting the local credentials only when
+// isTerminalGrantError says the grant itself is dead — so the user is
+// cleanly logged out and prompted to re-authenticate. A non-terminal
+// rejection (transient 5xx, unparseable/unrecognized body) leaves the
+// stored credentials in place so a later retry can still succeed. Either
+// way, the returned error is built only from the typed "error" field (via
+// tokenExchangeError) — never the raw body or "error_description" — so a
+// rejected-grant response can never leak a secret-shaped substring into a
+// log line.
 func (c *Client) refreshRejected(status int, body []byte) error {
 	rejectedErr := tokenExchangeError(status, body)
+
+	if !isTerminalGrantError(status, body) {
+		return rejectedErr
+	}
 
 	if delErr := c.store.delete(); delErr != nil {
 		return fmt.Errorf("%w (also failed to clear local linear credentials: %v)", rejectedErr, delErr)
 	}
 
 	return rejectedErr
+}
+
+// terminalGrantErrors are the token endpoint's typed OAuth "error" codes
+// (RFC 6749 §5.2) that indicate a refresh_token grant can never succeed
+// again with the current credentials: the refresh token or client
+// credentials themselves are dead, not merely rejected by a transient
+// condition.
+var terminalGrantErrors = map[string]bool{
+	"invalid_grant":       true,
+	"invalid_client":      true,
+	"unauthorized_client": true,
+}
+
+// isTerminalGrantError reports whether a non-2xx refresh_token grant
+// response indicates the grant is terminally dead and local credentials
+// should be deleted. A 5xx status is always treated as non-terminal
+// (transient server failure), regardless of body contents. Otherwise, body
+// is unmarshaled into the same tokenErrorResponse shape tokenExchangeError
+// uses; an unparseable body or an "error" code outside terminalGrantErrors
+// is treated as non-terminal, so refresh only ever deletes credentials on a
+// genuinely dead grant.
+func isTerminalGrantError(status int, body []byte) bool {
+	if status >= 500 {
+		return false
+	}
+
+	var te tokenErrorResponse
+	if err := json.Unmarshal(body, &te); err != nil {
+		return false
+	}
+
+	return terminalGrantErrors[te.Error]
 }
