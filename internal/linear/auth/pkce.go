@@ -1,4 +1,4 @@
-package linear
+package auth
 
 import (
 	"crypto/sha256"

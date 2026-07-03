@@ -1,4 +1,4 @@
-package linear
+package auth
 
 import (
 	"encoding/json"
@@ -17,7 +17,7 @@ import (
 // with mode 0600 by store.save.
 //
 //nolint:gosec // see comment above
-const credentialsFileName = "linear_credentials.json"
+const credentialsFileName = "credentials.json"
 
 // ErrNoCredentials is returned by store.load when no credentials have been
 // saved yet. Callers should treat this as "the user is not authenticated",
@@ -43,13 +43,13 @@ type diskToken struct {
 	Expiry  time.Time `json:"expiry"`
 }
 
-// store persists a single Token on disk as JSON, at <dir>/linear_credentials.json.
+// store persists a single Token on disk as JSON, at <dir>/credentials.json.
 type store struct {
 	path string
 }
 
 // newStore builds a store whose backing file lives at
-// filepath.Join(dir, "linear_credentials.json").
+// filepath.Join(dir, "credentials.json").
 func newStore(dir string) *store {
 	return &store{path: filepath.Join(dir, credentialsFileName)}
 }

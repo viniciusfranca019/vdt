@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/spf13/cobra"
 )
 
 func TestCommand_Registration(t *testing.T) {
@@ -13,17 +15,15 @@ func TestCommand_Registration(t *testing.T) {
 		t.Errorf("Use = %q, want %q", cmd.Use, "linear")
 	}
 
+	authCmd := findSubcommand(cmd, "auth")
+	if authCmd == nil {
+		t.Fatal("expected \"auth\" subcommand to be registered under \"linear\"")
+	}
+
 	wantSubcommands := []string{"login", "logout"}
 	for _, name := range wantSubcommands {
-		var found bool
-		for _, sub := range cmd.Commands() {
-			if sub.Name() == name {
-				found = true
-				break
-			}
-		}
-		if !found {
-			t.Errorf("expected %q subcommand to be registered", name)
+		if findSubcommand(authCmd, name) == nil {
+			t.Errorf("expected %q subcommand to be registered under \"linear auth\"", name)
 		}
 	}
 }
@@ -33,8 +33,8 @@ func TestCommand_Subcommands_AreWired(t *testing.T) {
 		name string
 		args []string
 	}{
-		{name: "login", args: []string{"login"}},
-		{name: "logout", args: []string{"logout"}},
+		{name: "login", args: []string{"auth", "login"}},
+		{name: "logout", args: []string{"auth", "logout"}},
 	}
 
 	for _, tt := range tests {
@@ -55,4 +55,16 @@ func TestCommand_Subcommands_AreWired(t *testing.T) {
 			}
 		})
 	}
+}
+
+// findSubcommand returns the direct child of cmd named name, or nil if no
+// such child is registered.
+func findSubcommand(cmd *cobra.Command, name string) *cobra.Command {
+	for _, sub := range cmd.Commands() {
+		if sub.Name() == name {
+			return sub
+		}
+	}
+
+	return nil
 }

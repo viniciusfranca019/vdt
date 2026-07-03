@@ -1,4 +1,4 @@
-package linear
+package auth
 
 import (
 	"encoding/json"
@@ -93,7 +93,7 @@ func TestStoreSaveDoesNotPersistRedactionPlaceholder(t *testing.T) {
 		t.Fatalf("save() returned unexpected error: %v", err)
 	}
 
-	raw, err := os.ReadFile(filepath.Join(dir, "linear_credentials.json"))
+	raw, err := os.ReadFile(filepath.Join(dir, "credentials.json"))
 	if err != nil {
 		t.Fatalf("failed to read credentials file directly: %v", err)
 	}
@@ -135,7 +135,7 @@ func TestStoreSaveFilePermissions(t *testing.T) {
 		t.Fatalf("save() returned unexpected error: %v", err)
 	}
 
-	info, err := os.Stat(filepath.Join(dir, "linear_credentials.json"))
+	info, err := os.Stat(filepath.Join(dir, "credentials.json"))
 	if err != nil {
 		t.Fatalf("os.Stat on credentials file failed: %v", err)
 	}

@@ -1,4 +1,4 @@
-package linear
+package auth
 
 import (
 	"context"
@@ -81,7 +81,7 @@ func newClient() (*Client, error) {
 		now:          time.Now,
 		openBrowser:  openInBrowser,
 		rand:         rand.Reader,
-		store:        newStore(filepath.Join(userConfigDir, "vdt")),
+		store:        newStore(filepath.Join(userConfigDir, "vdt", "linear")),
 		clientID:     clientID,
 		clientSecret: clientSecret,
 		authorizeURL: defaultAuthorizeURL,
