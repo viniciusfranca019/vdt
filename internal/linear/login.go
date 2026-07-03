@@ -57,17 +57,7 @@ func newClient() (*Client, error) {
 	clientID := os.Getenv("LINEAR_CLIENT_ID")
 	clientSecret := os.Getenv("LINEAR_CLIENT_SECRET")
 	if clientID == "" || clientSecret == "" {
-		return nil, fmt.Errorf(
-			"linear: missing OAuth credentials.\n\n"+
-				"Set LINEAR_CLIENT_ID and LINEAR_CLIENT_SECRET, obtained by creating a Linear OAuth application\n"+
-				"(Linear -> Settings -> API -> OAuth applications) with the redirect URI:\n\n"+
-				"    http://127.0.0.1:%d/callback\n\n"+
-				"Then export them, e.g.:\n"+
-				"    export LINEAR_CLIENT_ID=...\n"+
-				"    export LINEAR_CLIENT_SECRET=...\n\n"+
-				"See internal/linear/README.md for the full setup guide",
-			redirectPort,
-		)
+		return nil, missingCredentialsError()
 	}
 
 	userConfigDir, err := os.UserConfigDir()
