@@ -18,6 +18,7 @@ func Command() *cobra.Command {
 
 	cmd.AddCommand(loginCommand())
 	cmd.AddCommand(logoutCommand())
+	cmd.AddCommand(refreshCommand())
 
 	return cmd
 }
@@ -52,6 +53,24 @@ func logoutCommand() *cobra.Command {
 			}
 
 			return c.logout(cmd.Context(), cmd.OutOrStdout())
+		},
+	}
+}
+
+// refreshCommand builds the "refresh" subcommand, which unconditionally
+// exchanges the stored refresh token for a new access token, even if the
+// current one has not yet expired.
+func refreshCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "refresh",
+		Short: "Force-refresh stored Linear credentials",
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := newClient()
+			if err != nil {
+				return err
+			}
+
+			return c.forceRefresh(cmd.Context(), cmd.OutOrStdout())
 		},
 	}
 }

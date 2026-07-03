@@ -55,6 +55,42 @@ func (c *Client) validToken(ctx context.Context) (config.Secret, error) {
 	return fresh.Access, nil
 }
 
+// forceRefresh unconditionally performs the refresh_token grant against
+// c.tokenURL and persists the result, regardless of whether the currently
+// stored token has expired. This is the behavior backing `vdt linear auth
+// refresh`: unlike validToken, which only refreshes when necessary,
+// forceRefresh always hits the network — useful for rotating credentials
+// on demand or verifying that the stored refresh token still works.
+//
+// If no credentials have ever been saved, forceRefresh returns an
+// actionable error that still satisfies errors.Is(err, ErrNoCredentials),
+// and makes no HTTP call. Any other store.load failure is propagated
+// verbatim. On success, forceRefresh writes a confirmation message to out
+// that never echoes any token.
+func (c *Client) forceRefresh(ctx context.Context, out io.Writer) error {
+	cur, err := c.store.load()
+	if err != nil {
+		if errors.Is(err, ErrNoCredentials) {
+			return fmt.Errorf("not authenticated, run `vdt linear auth login`: %w", ErrNoCredentials)
+		}
+
+		return err
+	}
+
+	fresh, err := c.refresh(ctx, cur)
+	if err != nil {
+		return err
+	}
+
+	if err := c.store.save(fresh); err != nil {
+		return fmt.Errorf("save refreshed linear credentials: %w", err)
+	}
+
+	fmt.Fprintln(out, "Refreshed Linear credentials.")
+
+	return nil
+}
+
 // refresh performs the RFC 6749 §6 refresh_token grant against c.tokenURL,
 // exchanging cur's refresh token for a new access token.
 //
