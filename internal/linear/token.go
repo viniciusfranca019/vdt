@@ -30,25 +30,24 @@ const viewerQuery = `{"query":"{ viewer { id name } }"}`
 type Client struct {
 	http *http.Client
 	now  func() time.Time
-	//nolint:unused // wired up by the login-flow phase, which opens the
-	// system browser to the authorize URL.
+	// openBrowser opens the system browser to the authorize URL during
+	// login (see login.go's login / openInBrowser).
 	openBrowser func(url string) error
-	//nolint:unused // wired up by the login-flow phase for PKCE
-	// verifier/state generation (see pkce.go's newCodeVerifier/newState).
+	// rand supplies randomness for PKCE verifier/state generation (see
+	// pkce.go's newCodeVerifier/newState).
 	rand         io.Reader
 	store        *store
 	clientID     string
 	clientSecret config.Secret
-	//nolint:unused // wired up by the login-flow phase, passed to
-	// buildAuthorizeURL (see authorize.go).
+	// authorizeURL is passed to buildAuthorizeURL (see authorize.go).
 	authorizeURL string
 	tokenURL     string
-	//nolint:unused // wired up by the logout-flow phase to revoke tokens
+	// revokeURL is used by logout (see login.go's revoke) to revoke tokens
 	// with Linear.
 	revokeURL string
 	apiURL    string
-	//nolint:unused // wired up by the login-flow phase, passed to
-	// newCallbackServer (see callback.go) to bind the loopback listener.
+	// redirectPort is passed to newCallbackServer (see callback.go) to bind
+	// the loopback listener.
 	redirectPort int
 }
 

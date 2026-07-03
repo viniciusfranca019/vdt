@@ -3,8 +3,6 @@
 package linear
 
 import (
-	"errors"
-
 	"github.com/spf13/cobra"
 )
 
@@ -28,8 +26,13 @@ func loginCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "login",
 		Short: "Authenticate with Linear",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errors.New("not implemented")
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := newClient()
+			if err != nil {
+				return err
+			}
+
+			return c.login(cmd.Context(), cmd.OutOrStdout())
 		},
 	}
 }
@@ -40,8 +43,13 @@ func logoutCommand() *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
 		Short: "Remove stored Linear credentials",
-		RunE: func(_ *cobra.Command, _ []string) error {
-			return errors.New("not implemented")
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			c, err := newClient()
+			if err != nil {
+				return err
+			}
+
+			return c.logout(cmd.Context(), cmd.OutOrStdout())
 		},
 	}
 }
