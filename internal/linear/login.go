@@ -1,7 +1,6 @@
 package linear
 
 import (
-	"bufio"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -115,7 +114,7 @@ func saveLinearConfig(clientID string, secret config.Secret) error {
 		if errors.Is(err, config.ErrNotConfigured) {
 			cfg = &config.Config{}
 		} else {
-			return err
+			return fmt.Errorf("load existing linear config: %w", err)
 		}
 	}
 
@@ -141,17 +140,40 @@ func isTerminalStdin() bool {
 // trimming the trailing newline/carriage-return and surrounding whitespace.
 // It is the real promptLine dependency wired into newClient's
 // credentialResolver, used for the (non-secret) client_id.
+//
+// It reads directly from os.Stdin one byte at a time instead of wrapping it
+// in a bufio.Reader, deliberately avoiding any userspace read-ahead: a
+// bufio.Reader would happily buffer bytes past the trailing '\n' (e.g. when a
+// user pastes client_id and client_secret together), and those buffered
+// bytes would then be invisible to the raw fd read term.ReadPassword performs
+// for the client_secret prompt that follows, causing it to block forever
+// waiting for input that was already supplied. Reading unbuffered leaves any
+// bytes past the delimiter sitting in the OS's own tty input buffer, where
+// the subsequent promptSecret call can still see them.
 func promptLine(label string) (string, error) {
 	if _, err := fmt.Fprint(os.Stderr, label); err != nil {
 		return "", err
 	}
 
-	line, err := bufio.NewReader(os.Stdin).ReadString('\n')
-	if err != nil && !errors.Is(err, io.EOF) {
-		return "", err
+	var line strings.Builder
+	b := make([]byte, 1)
+	for {
+		n, err := os.Stdin.Read(b)
+		if n > 0 {
+			if b[0] == '\n' {
+				break
+			}
+			line.WriteByte(b[0])
+		}
+		if err != nil {
+			if errors.Is(err, io.EOF) {
+				break
+			}
+			return "", err
+		}
 	}
 
-	return strings.TrimSpace(line), nil
+	return strings.TrimSpace(line.String()), nil
 }
 
 // promptSecret writes label to stderr and reads one masked line from stdin

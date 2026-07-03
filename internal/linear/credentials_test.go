@@ -324,6 +324,85 @@ func TestCredentialResolver_PartialEnvFallsThrough(t *testing.T) {
 	}
 }
 
+// TestCredentialResolver_ConfigLoadErrorSurfaces pins that a genuine config
+// load error (corrupt/unreadable config.yaml) must surface as-is from
+// resolve(), never be masked behind the didactic missing-credentials error
+// nor silently fall through to prompting. Only config.ErrNotConfigured
+// ("no config file yet") should fall through; any other error is a real
+// failure that must abort resolution immediately.
+func TestCredentialResolver_ConfigLoadErrorSurfaces(t *testing.T) {
+	sentinel := errors.New("corrupt config file")
+
+	var (
+		isInteractiveCalls int
+		promptLineCalls    int
+		promptSecretCalls  int
+		saveConfigCalls    int
+	)
+
+	r := credentialResolver{
+		getenv: func(string) string { return "" },
+		loadConfig: func() (*config.Config, error) {
+			return nil, sentinel
+		},
+		saveConfig: func(string, config.Secret) error {
+			saveConfigCalls++
+			return nil
+		},
+		isInteractive: func() bool {
+			isInteractiveCalls++
+			return false
+		},
+		promptLine: func(string) (string, error) {
+			promptLineCalls++
+			return "", errors.New("promptLine should not be called")
+		},
+		promptSecret: func(string) (string, error) {
+			promptSecretCalls++
+			return "", errors.New("promptSecret should not be called")
+		},
+		out: &bytes.Buffer{},
+	}
+
+	clientID, clientSecret, err := r.resolve()
+	if err == nil {
+		t.Fatal("resolve() returned nil error for a genuine config load failure, want a non-nil error")
+	}
+
+	// Critical invariant: the real cause must be surfaced (wrapped), not
+	// swallowed. Never weaken this to merely checking err != nil.
+	if !errors.Is(err, sentinel) {
+		t.Errorf("resolve() error %q does not wrap the sentinel load error, want errors.Is(err, sentinel) to hold", err)
+	}
+
+	// Critical invariant: a genuine load error must NOT be reported as the
+	// generic "missing credentials" didactic message — that message is only
+	// for config.ErrNotConfigured / prompting paths.
+	if strings.Contains(err.Error(), "127.0.0.1:53682") {
+		t.Errorf("resolve() error %q looks like the didactic missing-credentials message, want the real load error surfaced instead", err.Error())
+	}
+
+	if clientID != "" {
+		t.Errorf("clientID = %q, want empty string on error", clientID)
+	}
+	if string(clientSecret) != "" {
+		t.Errorf("clientSecret = %q, want empty string on error", string(clientSecret))
+	}
+
+	if isInteractiveCalls != 0 {
+		t.Errorf("isInteractive was called %d time(s), want 0 (a hard load error must abort before checking interactivity)", isInteractiveCalls)
+	}
+	if promptLineCalls != 0 {
+		t.Errorf("promptLine was called %d time(s), want 0", promptLineCalls)
+	}
+	if promptSecretCalls != 0 {
+		t.Errorf("promptSecret was called %d time(s), want 0", promptSecretCalls)
+	}
+	if saveConfigCalls != 0 {
+		t.Errorf("saveConfig was called %d time(s), want 0", saveConfigCalls)
+	}
+}
+
 // TestCredentialResolver_PromptSecretErrorPropagates pins that a failure
 // from the masked secret prompt (e.g. stdin closed, read error) surfaces as
 // a non-nil error from resolve() and must never reach saveConfig with a

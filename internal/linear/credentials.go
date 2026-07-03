@@ -1,6 +1,7 @@
 package linear
 
 import (
+	"errors"
 	"fmt"
 	"io"
 
@@ -45,7 +46,11 @@ func (r credentialResolver) resolve() (string, config.Secret, error) {
 		return id, secret, nil
 	}
 
-	if id, secret, ok := r.fromConfig(); ok {
+	id, secret, ok, err := r.fromConfig()
+	if err != nil {
+		return "", "", err
+	}
+	if ok {
 		return id, secret, nil
 	}
 
@@ -70,26 +75,29 @@ func (r credentialResolver) fromEnv() (string, config.Secret, bool) {
 	return id, config.Secret(secret), true
 }
 
-// fromConfig loads the on-disk config and reports it as satisfied only when
-// both ClientID and ClientSecret are already non-empty. config.ErrNotConfigured
-// (no config file yet) and any other load error are both treated as "no
-// config available yet", letting resolve fall through to interactive
-// prompting or the non-interactive error rather than failing hard here.
-func (r credentialResolver) fromConfig() (string, config.Secret, bool) {
+// fromConfig loads the on-disk config and reports it as satisfied (ok=true)
+// only when both ClientID and ClientSecret are already non-empty.
+// config.ErrNotConfigured (no file yet) is treated as "nothing usable yet"
+// (ok=false, err=nil), letting resolve fall through to interactive prompting
+// or the non-interactive error. Any OTHER load error (parse failure,
+// permission error, ...) is a genuine failure: it is wrapped and returned so
+// resolve aborts immediately instead of masking it behind the didactic
+// missing-credentials error or silently falling through to prompting.
+func (r credentialResolver) fromConfig() (string, config.Secret, bool, error) {
 	cfg, err := r.loadConfig()
 	if err != nil {
-		// config.ErrNotConfigured (no file yet) and any other load error
-		// (parse failure, permission error, ...) are both treated as
-		// "nothing usable yet", so resolve falls through to interactive
-		// prompting or the non-interactive error instead of failing hard.
-		return "", "", false
+		if errors.Is(err, config.ErrNotConfigured) {
+			return "", "", false, nil
+		}
+
+		return "", "", false, fmt.Errorf("load linear config: %w", err)
 	}
 
 	if cfg.Linear.ClientID == "" || string(cfg.Linear.ClientSecret) == "" {
-		return "", "", false
+		return "", "", false, nil
 	}
 
-	return cfg.Linear.ClientID, cfg.Linear.ClientSecret, true
+	return cfg.Linear.ClientID, cfg.Linear.ClientSecret, true, nil
 }
 
 // fromPrompt interactively collects the client_id (visible) and
