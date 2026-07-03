@@ -373,17 +373,67 @@ func TestNewClient_ReadsEnvClientCredentials(t *testing.T) {
 // TestNewClient_MissingCredentialsErrors pins the failure mode when no
 // client credentials are configured anywhere (env unset, and — since
 // internal/config.Load is still a stub — no on-disk fallback either):
-// newClient() must return a non-nil error, and that error must never embed
-// a secret-shaped value.
+// newClient() must return a non-nil error, and that error must be a
+// DIDACTIC, self-contained set of instructions so a CLI user who has just
+// hit this for the first time knows exactly how to finish setup under the
+// "each user creates their own Linear OAuth app" model — naming both env
+// vars, the fixed redirect URI they must register
+// (http://127.0.0.1:53682/callback), and hinting that an OAuth application
+// is what needs to be created. The error must also never embed a
+// secret-shaped value, even when one of the two credentials is actually
+// present in the environment.
 func TestNewClient_MissingCredentialsErrors(t *testing.T) {
-	t.Setenv("LINEAR_CLIENT_ID", "")
-	t.Setenv("LINEAR_CLIENT_SECRET", "")
+	const presentSecretSentinel = "csecret-present-should-not-leak"
 
-	_, err := newClient()
-	if err == nil {
-		t.Fatal("newClient() returned nil error with no client credentials configured, want non-nil")
+	tests := []struct {
+		name         string
+		clientID     string
+		clientSecret string
+	}{
+		{
+			name:         "both missing",
+			clientID:     "",
+			clientSecret: "",
+		},
+		{
+			name:         "only client secret set",
+			clientID:     "",
+			clientSecret: presentSecretSentinel,
+		},
+		{
+			name:         "only client id set",
+			clientID:     "cid-present-should-not-leak",
+			clientSecret: "",
+		},
 	}
-	if strings.Contains(err.Error(), "csecret") {
-		t.Errorf("newClient() error %q leaks a secret-shaped value", err.Error())
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Setenv("LINEAR_CLIENT_ID", tt.clientID)
+			t.Setenv("LINEAR_CLIENT_SECRET", tt.clientSecret)
+
+			_, err := newClient()
+			if err == nil {
+				t.Fatal("newClient() returned nil error with missing client credentials, want non-nil")
+			}
+			msg := err.Error()
+
+			if !strings.Contains(msg, "LINEAR_CLIENT_ID") {
+				t.Errorf("newClient() error %q does not mention %q, want it to name the missing env var", msg, "LINEAR_CLIENT_ID")
+			}
+			if !strings.Contains(msg, "LINEAR_CLIENT_SECRET") {
+				t.Errorf("newClient() error %q does not mention %q, want it to name the missing env var", msg, "LINEAR_CLIENT_SECRET")
+			}
+			if !strings.Contains(msg, "127.0.0.1:53682") {
+				t.Errorf("newClient() error %q does not mention the redirect URI %q the user must register in their Linear OAuth app", msg, "127.0.0.1:53682")
+			}
+			if !strings.Contains(strings.ToLower(msg), "oauth") {
+				t.Errorf("newClient() error %q does not hint at creating an OAuth app (case-insensitive %q), want an actionable hint", msg, "oauth")
+			}
+
+			if tt.clientSecret == presentSecretSentinel && strings.Contains(msg, presentSecretSentinel) {
+				t.Errorf("newClient() error %q leaks the present client secret value %q", msg, presentSecretSentinel)
+			}
+		})
 	}
 }
