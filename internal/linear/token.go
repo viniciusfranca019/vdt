@@ -35,9 +35,7 @@ type Client struct {
 	openBrowser func(url string) error
 	//nolint:unused // wired up by the login-flow phase for PKCE
 	// verifier/state generation (see pkce.go's newCodeVerifier/newState).
-	rand io.Reader
-	//nolint:unused // wired up by the login/logout-flow phases for
-	// persisting and clearing the Token via store.save/store.load/store.delete.
+	rand         io.Reader
 	store        *store
 	clientID     string
 	clientSecret config.Secret
