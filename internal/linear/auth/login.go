@@ -221,7 +221,7 @@ func (c *Client) login(ctx context.Context, out io.Writer) error {
 
 	srv, err := newCallbackServer(c.redirectPort, state)
 	if err != nil {
-		return fmt.Errorf("start local callback server (another `vdt linear login` may be running?): %w", err)
+		return fmt.Errorf("start local callback server (another `vdt linear auth login` may be running?): %w", err)
 	}
 	defer func() { _ = srv.Close() }()
 

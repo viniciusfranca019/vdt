@@ -157,7 +157,7 @@ func (c *Client) refresh(ctx context.Context, cur *Token) (*Token, error) {
 	}
 
 	if c.now().Sub(cur.Expiry) > refreshGraceWindow {
-		return nil, errors.New("linear refresh token grace window exceeded; run vdt linear login to re-authenticate")
+		return nil, errors.New("linear refresh token grace window exceeded; run vdt linear auth login to re-authenticate")
 	}
 
 	fresh.Refresh = cur.Refresh
