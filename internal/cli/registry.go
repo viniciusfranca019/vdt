@@ -10,6 +10,7 @@ package cli
 import (
 	"github.com/spf13/cobra"
 
+	"github.com/viniciusfranca/vdt/internal/linear"
 	"github.com/viniciusfranca/vdt/internal/ping"
 )
 
@@ -17,6 +18,7 @@ import (
 // the root command.
 func moduleCommands() []*cobra.Command {
 	return []*cobra.Command{
+		linear.Command(),
 		ping.Command(),
 	}
 }
